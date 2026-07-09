@@ -1,0 +1,27 @@
+# الملفات الحساسة
+.env
+session.json
+wwebjs_auth/
+wwebjs_cache/
+*.log
+
+# مجلدات Node.js
+node_modules/
+package-lock.json
+yarn.lock
+
+# ملفات النظام
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ملفات التحرير
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# سجلات التطبيق
+logs.json
+data.json
