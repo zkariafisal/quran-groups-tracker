@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📚 نظام مراقبة حلقات القرآن</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Tahoma', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* ===== Header ===== */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #718096;
+            font-size: 1.1em;
+        }
+
+        /* ===== Stats ===== */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        .stat-card .number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-card .label {
+            color: #718096;
+            font-size: 0.9em;
+        }
+
+        /* ===== Status Bar ===== */
+        .status-bar {
+            background: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 8px;
+        }
+
+        .status-dot.online {
+            background: #48bb78;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background: #fc8181;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* ===== Notifications ===== */
+        .notifications-container {
+            margin-bottom: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .notification {
+            background: #ebf8ff;
+            border-right: 5px solid #3182ce;
+            padding: 12px 18px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            animation: slideIn 0.5s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .notification .group-name {
+            font-weight: bold;
+            color: #2b6cb0;
+        }
+
+        .notification .left {
+            color: #e53e3e;
+        }
+
+        .notification .joined {
+            color: #38a169;
+        }
+
+        .notification .time {
+            color: #718096;
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* ===== Groups ===== */
+        .groups-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .group-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .group-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+        }
+
+        .group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 12px;
+            margin-bottom: 15px;
+        }
+
+        .group-name {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .group-name .icon {
+            margin-left: 8px;
+        }
+
+        .member-count {
+            background: #667eea;
+            color: white;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+
+        .participants-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .participant {
+            background: #f7fafc;
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            border: 1px solid #e2e8f0;
+            color: #2d3748;
+        }
+
+        .participant.left {
+            background: #fed7d7;
+            border-color: #fc8181;
+            color: #c53030;
+            text-decoration: line-through;
+            animation: shake 0.5s;
+        }
+
+        .participant.joined {
+            background: #c6f6d5;
+            border-color: #48bb78;
+            color: #276749;
+            animation: popIn 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0); }
+            80% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .group-footer {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            color: #a0aec0;
+        }
+
+        /* ===== Empty State ===== */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+
+        .empty-state .emoji {
+            font-size: 4em;
+            display: block;
+            margin-bottom: 20px;
+        }
+
+        .empty-state h2 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+
+        .empty-state p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        /* ===== Scrollbar ===== */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f7fafc;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0;
+        }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+            .groups-grid {
+                grid-template-columns: 1fr;
+            }
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .status-bar {
+                flex-direction: column;
+                gap: 8px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- ===== Header ===== -->
+        <div class="header">
+            <h1>📚 نظام متابعة حلقات القرآن</h1>
+            <p>تتبع تلقائي للمغادرين والمنضمين في مجموعات واتساب</p>
+        </div>
+
+        <!-- ===== Stats ===== -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="number" id="totalGroups">0</div>
+                <div class="label">📋 مجموع الحلقات</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="totalMembers">0</div>
+                <div class="label">👥 إجمالي الأعضاء</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="lastUpdate">-</div>
+                <div class="label">🕐 آخر تحديث</div>
+            </div>
+        </div>
+
+        <!-- ===== Status Bar ===== -->
+        <div class="status-bar">
+            <div>
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">جاري الاتصال...</span>
+            </div>
+            <div>
+                <span id="updateCount">0</span> تغيير مسجل
+            </div>
+        </div>
+
+        <!-- ===== Notifications ===== -->
+        <div class="notifications-container" id="notificationsContainer"></div>
+
+        <!-- ===== Groups ===== -->
+        <div id="groupsContainer">
+            <div class="empty-state">
+                <span class="emoji">⏳</span>
+                <h2>جاري تحميل البيانات...</h2>
+                <p>يرجى الانتظار حتى يتم تحميل المجموعات</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let groups = [];
+        let updateCount = 0;
+        let lastUpdateTime = null;
+
+        // ===== DOM Elements =====
+        const totalGroupsEl = document.getElementById('totalGroups');
+        const totalMembersEl = document.getElementById('totalMembers');
+        const lastUpdateEl = document.getElementById('lastUpdate');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const updateCountEl = document.getElementById('updateCount');
+        const groupsContainer = document.getElementById('groupsContainer');
+        const notificationsContainer = document.getElementById('notificationsContainer');
+
+        // ===== Socket Events =====
+        socket.on('connect', () => {
+            statusDot.className = 'status-dot online';
+            statusText.textContent = '🟢 متصل بالخادم';
+        });
+
+        socket.on('disconnect', () => {
+            statusDot.className = 'status-dot offline';
+            statusText.textContent = '🔴 تم قطع الاتصال';
+        });
+
+        // ===== استقبال البيانات الأولية =====
+        socket.on('initialData', (data) => {
+            groups = data;
+            renderGroups(data);
+            updateStats(data);
+            statusText.textContent = `✅ جاري المراقبة (${data.length} حلقة)`;
+            document.querySelector('.empty-state')?.remove();
+        });
+
+        // ===== استقبال التحديثات =====
+        socket.on('update', (update) => {
+            updateCount++;
+            updateCountEl.textContent = updateCount;
+            lastUpdateTime = new Date();
+
+            // إضافة إشعار
+            addNotification(update);
+
+            // تحديث إحصائيات المجموعة المتأثرة
+            const groupIndex = groups.findIndex(g => g.id === update.groupId);
+            if (groupIndex !== -1) {
+                // تحديث عدد الأعضاء
+                groups[groupIndex].total = update.totalMembers;
+                // إعادة عرض المجموعات
+                renderGroups(groups);
+                updateStats(groups);
+            }
+
+            lastUpdateEl.textContent = 'الآن';
+        });
+
+        // ===== وظيفة عرض المجموعات =====
+        function renderGroups(groupsData) {
+            if (!groupsData || groupsData.length === 0) {
+                groupsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <span class="emoji">📭</span>
+                        <h2>لا توجد حلقات</h2>
+                        <p>لم يتم العثور على أي مجموعات للمراقبة</p>
+                    </div>
+                `;
+                return;
+            }
+
+            groupsContainer.innerHTML = `
+                <div class="groups-grid">
+                    ${groupsData.map(group => `
+                        <div class="group-card">
+                            <div class="group-header">
+                                <span class="group-name">
+                                    <span class="icon">📖</span>
+                                    ${group.name || 'مجموعة بدون اسم'}
+                                </span>
+                                <span class="member-count">👥 ${group.total || 0}</span>
+                            </div>
+                            <div class="participants-list" id="participants-${group.id}">
+                                ${group.participants ? group.participants.map(p => `
+                                    <span class="participant">${p.name || 'مستخدم'}</span>
+                                `).join('') : 'لا يوجد أعضاء'}
+                            </div>
+                            <div class="group-footer">
+                                <span>🆔 ${group.id.substring(0, 15)}...</span>
+                                <span>🕐 ${group.lastUpdate ? new Date(group.lastUpdate).toLocaleString('ar-SA') : 'غير معروف'}</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // ===== وظيفة تحديث الإحصائيات =====
+        function updateStats(groupsData) {
+            const total = groupsData.length;
+            const members = groupsData.reduce((sum, g) => sum + (g.total || g.participants?.length || 0), 0);
+            
+            totalGroupsEl.textContent = total;
+            totalMembersEl.textContent = members;
+            
+            if (lastUpdateTime) {
+                lastUpdateEl.textContent = 'الآن';
+            } else if (groupsData.length > 0) {
+                const latest = groupsData.reduce((latest, g) => {
+                    const date = new Date(g.lastUpdate);
+                    return date > latest ? date : latest;
+                }, new Date(0));
+                lastUpdateEl.textContent = latest.getTime() > 0 ? latest.toLocaleTimeString('ar-SA') : '-';
+            }
+        }
+
+        // ===== وظيفة إضافة إشعار =====
+        function addNotification(update) {
+            let message = `<div class="group-name">📢 ${update.groupName}</div>`;
+            
+            if (update.left && update.left.length > 0) {
+                message += `<div class="left">🚪 غادر: ${update.left.join('، ')}</div>`;
+            }
+            
+            if (update.joined && update.joined.length > 0) {
+                message += `<div class="joined">👋 انضم: ${update.joined.join('، ')}</div>`;
+            }
+            
+            message += `<div class="time">🕐 ${update.timestamp}</div>`;
+
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.innerHTML = message;
+            
+            notificationsContainer.prepend(notification);
+
+            // الاحتفاظ بآخر 20 إشعار فقط
+            while (notificationsContainer.children.length > 20) {
+                notificationsContainer.removeChild(notificationsContainer.lastChild);
+            }
+
+            // تحديث مشاركين المجموعة المتأثرة
+            updateParticipants(update);
+        }
+
+        // ===== وظيفة تحديث قائمة المشاركين =====
+        function updateParticipants(update) {
+            // إعادة تحميل البيانات بالكامل (أبسط حل)
+            setTimeout(() => {
+                socket.emit('requestUpdate');
+            }, 1000);
+        }
+
+        // ===== تحديث تلقائي كل دقيقة =====
+        setInterval(() => {
+            if (groups.length > 0) {
+                // تحديث الوقت
+                const now = new Date();
+                if (lastUpdateTime) {
+                    const diff = Math.floor((now - lastUpdateTime) / 1000);
+                    if (diff < 60) {
+                        lastUpdateEl.textContent = 'الآن';
+                    } else if (diff < 3600) {
+                        lastUpdateEl.textContent = `منذ ${Math.floor(diff / 60)} دقيقة`;
+                    } else {
+                        lastUpdateEl.textContent = `منذ ${Math.floor(diff / 3600)} ساعة`;
+                    }
+                }
+            }
+        }, 30000);
+
+        console.log('📚 نظام مراقبة حلقات القرآن يعمل بنجاح!');
+    </script>
+</body>
+</html>
